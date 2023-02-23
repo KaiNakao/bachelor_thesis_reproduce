@@ -27,6 +27,7 @@ def lglobal(alpha_vec):
         x[1] = yc + yr * dy
         return x
 
+    # // dxdp[i][j] = dxi / dpj
     def dxdp_(p):
         dxdp = np.zeros((2, 2))
         dpvec = np.array([[1., 0., 2. * p[0], p[1], 0., 3. * p[0]**2, 2. * p[0] * p[1], p[1]**2, 0.],
@@ -36,6 +37,7 @@ def lglobal(alpha_vec):
             dxdp[1][i] = np.dot(alphay, dpvec[i]) * dy
         return dxdp
 
+    # // d2xdp2[i][j][k] = d^2xi / (dpj dpk)
     def d2xdp2_(p):
         d2xdp2 = np.zeros((2, 2, 2))
         ddpvec = np.array([[[0., 0., 2., 0., 0., 6. * p[0], 2. * p[1], 0., 0.],
@@ -60,24 +62,6 @@ def lglobal(alpha_vec):
             err = np.linalg.norm(dp)
             cnt += 1
         return [p, cnt]
-
-    # def x_(p):
-    #     x = np.zeros(2)
-    #     x[0] = pow((p[0] + p[1]) / 2., 2) - 1.
-    #     x[1] = pow((p[0] - p[1]) / 2., 2) - 1.
-    #     return x
-
-    # def p_(x):
-    #     p = np.zeros(2)
-    #     p[0] = np.sqrt(x[0] + 1.) + np.sqrt(x[1] + 1.)
-    #     p[1] = np.sqrt(x[0] + 1.) - np.sqrt(x[1] + 1.)
-    #     return p
-
-    # def dxdp_(p): # dxdp[i][j] = dxi / dpj
-    #     return [[(p[0] + p[1])/2., (p[0] + p[1])/2.], [(p[0] - p[1])/2., -(p[0] - p[1])/2.]]
-
-    # def d2xdp2_(p): # d2xdp2[i][j][k] = d^2xi / (dpj dpk)
-    #     return [[[1./2., 1./2.], [1./2., 1./2.]], [[1./2., -1./2.], [-1./2., 1./2.]]]
 
     nelement = len(cny)
     lglobal = 0.
@@ -122,7 +106,7 @@ def lglobal(alpha_vec):
             dvec[2 * inode + 1] = upnodes[inode][1]
 
         # physical property
-        young = young_global[ie]
+        young = 5000.
         nyu = 0.30
         lam = young * nyu / (1. + nyu) / (1. - 2. * nyu)
         mu = young / 2. / (1. + nyu)
@@ -260,14 +244,12 @@ def lglobal(alpha_vec):
 
 
 if __name__ == "__main__":
-    cny = np.loadtxt("model/slope_model/cny.csv",
+    cny = np.loadtxt("model/cny.csv",
                      skiprows=1, delimiter=",", dtype=int)[:, 1:]
-    coor = np.loadtxt("model/slope_model/coor.csv",
+    coor = np.loadtxt("model/coor.csv",
                       skiprows=1, delimiter=",")[:, 1:]
-    young_global = np.loadtxt(
-        "model/slope_model/young.csv", skiprows=1, delimiter=",")[:, 1]
     displacement = np.loadtxt(
-        "output/slope/displacement_node_cart.csv", skiprows=1, delimiter=",")[:, 2:]
+        "output/displacement_node_cart.csv", skiprows=1, delimiter=",")[:, 2:]
     gauss_point = np.loadtxt("gauss_point4.csv", skiprows=1, delimiter=",")
     fbody_cart = np.array([0., -15.])
     alpha_init = np.zeros(18)
