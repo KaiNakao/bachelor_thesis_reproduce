@@ -25,3 +25,23 @@ make main && ./main
 make main && ./main
 ```
 `visualize.ipynb`では、論文中図6,7,9,10,13,14の再現を確認する。
+
+## sec5
+論文第5章 "2次元問題への適用例"を再現する。
+
+`ref/displacement_dist_cart_ref.csv`と`ref/stress_dist_cart_ref.csv`
+はそれぞれ変位と応力の参照解であり、要素分割を細かくした2次要素を用いて求めたものである。
+
+座標変換のパラメータ推定は、`sec5`ディレクトリで
+```
+python3 src/optimize_alpha.py
+```
+デカルト座標系での求めた解`output/displacement_node_cart.csv`が必要であることに注意。
+
+
+また、プログラムのコンパイル、実行は`sec5`ディレクトリで
+```
+make main && ./main
+```
+
+`visualize.ipynb`では、論文中図16,17,18,19,20,21,22,23,24,25,26の再現を確認する。
