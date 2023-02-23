@@ -1,1 +1,2 @@
 # bachelor_thesis_reproduce
+中尾の卒論中の数値実験を再現するためのプログラムとデータ。
