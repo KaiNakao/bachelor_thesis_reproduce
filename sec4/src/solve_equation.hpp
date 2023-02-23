@@ -1,0 +1,6 @@
+#pragma once
+#include "matvec.hpp"
+
+std::vector<double> solve_equation(const std::vector<double> &coor,
+                                   std::vector<std::vector<double>> &kglobal,
+                                   std::vector<double> &bglobal);

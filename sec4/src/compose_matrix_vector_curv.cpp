@@ -1,0 +1,206 @@
+#include "compose_matrix_vector_curv.hpp"
+
+void compose_matrix_vector_curv(
+    const std::vector<std::vector<int>> &cny,
+    const std::vector<double> &coor_cart,
+    std::function<std::vector<double>(const double &)> fbody_func,
+    const std::vector<std::vector<double>> &alpha_vec_global,
+    const double &young, const std::vector<std::vector<double>> &gauss_point,
+    std::vector<std::vector<double>> &kglobal, std::vector<double> &bglobal) {
+    int nelement = cny.size();
+
+    for (int ie = 0; ie < nelement; ie++) {
+        // id of each node in the element
+        auto node_id = cny.at(ie);
+
+        // x at nodes
+        std::vector<double> xnode(3);
+        for (int inode = 0; inode < 3; inode++) {
+            xnode.at(inode) = coor_cart.at(node_id.at(inode));
+        }
+
+        // optimized parameter for coordinate transformation
+        const std::vector<double> alpha_vec_element = alpha_vec_global.at(ie);
+
+        auto x_ = [&](double p) {
+            std::vector<double> pvec(alpha_vec_element.size());
+            for (int i = 0; i < alpha_vec_element.size(); i++) {
+                pvec.at(i) = pow(p, i + 2);
+            }
+            return xnode.at(2) +
+                   (xnode.at(1) - xnode.at(0)) *
+                       (p + inner_product(pvec, alpha_vec_element));
+        };
+
+        auto dxdp_ = [&](double p) {
+            std::vector<double> pvec(alpha_vec_element.size());
+            for (int i = 0; i < alpha_vec_element.size(); i++) {
+                pvec.at(i) = (i + 2) * pow(p, i + 1);
+            }
+            return (xnode.at(1) - xnode.at(0)) *
+                   (1. + inner_product(pvec, alpha_vec_element));
+        };
+
+        auto d2xdp2_ = [&](double p) {
+            std::vector<double> pvec(alpha_vec_element.size());
+            for (int i = 0; i < alpha_vec_element.size(); i++) {
+                pvec.at(i) = (i + 1) * (i + 2) * pow(p, i);
+            }
+            return (xnode.at(1) - xnode.at(0)) *
+                   inner_product(pvec, alpha_vec_element);
+        };
+
+        // solve x(p) = x for p
+        auto p_ = [&](double x, double p0) {
+            auto p = p0;
+            double err = 1.;
+            while (err > pow(10., -8)) {
+                p -= (x_(p) - x) / dxdp_(p);
+                err = fabs(x_(p) - x);
+            }
+            return p;
+        };
+
+        // p at nodes
+        std::vector<double> pnode(3);
+        for (int inode = 0; inode < 3; inode++) {
+            pnode.at(inode) = p_(xnode.at(inode), 0.);
+        }
+
+        // element stiffness matrix
+        std::vector<std::vector<double>> kelement(3, std::vector<double>(3));
+        // element force vector
+        std::vector<double> belement(3);
+
+        // Gaussian quadrature
+        for (int ipoint = 0; ipoint < gauss_point.size(); ipoint++) {
+            double r = gauss_point.at(ipoint).at(0);
+            double w = gauss_point.at(ipoint).at(1);
+
+            // shape function
+            std::vector<double> nvec(3);
+            nvec.at(0) = r * (r - 1.) / 2.;
+            nvec.at(1) = r * (r + 1.) / 2.;
+            nvec.at(2) = -(r + 1.) * (r - 1.);
+
+            std::vector<std::vector<double>> nmat(1, std::vector<double>(3));
+            for (int inode = 0; inode < 3; inode++) {
+                nmat.at(0).at(inode) = nvec.at(inode);
+            }
+
+            // dndr (dndr[i] = dn[i]/dr)
+            std::vector<double> dndr = {-1. / 2. + r, 1. / 2. + r, -2. * r};
+
+            // dpdr (dpdr = dp/dr)
+            double dpdr = 0.;
+            for (int i = 0; i < 3; i++) {
+                dpdr += dndr.at(i) * pnode.at(i);
+            }
+
+            // drdp (drdp = dr/dp)
+            double drdp = pow(dpdr, -1.);
+
+            // dndp (dndp[i] = dn[i]/dp)
+            std::vector<double> dndp(3);
+            for (int i = 0; i < 3; i++) {
+                dndp.at(i) += dndr.at(i) * drdp;
+            }
+
+            // calculate bmat
+            std::vector<std::vector<double>> bmat(1, std::vector<double>(3));
+            for (int inode = 0; inode < 3; inode++) {
+                bmat.at(0).at(inode) = dndp.at(inode);
+            }
+
+            // p
+            double p = 0;
+            for (int inode = 0; inode < 3; inode++) {
+                p += pnode.at(inode) * nvec.at(inode);
+            }
+
+            // x
+            double x = x_(p);
+
+            // dxdp (dxdp = dx/dp)
+            auto dxdp = dxdp_(p);
+
+            // dpdx (dpdx = dp/dx);
+            auto dpdx = pow(dxdp, -1);
+
+            // d2xdp2 (d2xdp2 = d^2x/dp^2)
+            double d2xdp2 = d2xdp2_(p);
+
+            // elastic coefficient
+            auto ctensor_cart = young;
+            double ctensor = pow(dpdx, 4.) * ctensor_cart;
+
+            // dmat (c tensor by matrix)
+            std::vector<std::vector<double>> dmat(1, std::vector<double>(1));
+            dmat.at(0).at(0) = ctensor;
+
+            // body force
+            auto fbody_cart = fbody_func(x);
+            std::vector<double> fbody(1);
+            fbody.at(0) = dpdx * fbody_cart.at(0);
+
+            // calculate Christoffel symbols
+            // gtensor[i][j][k] = G^k_ij
+            double gtensor = d2xdp2 * dpdx;
+
+            // gmat (g tensor by matrix)
+            std::vector<std::vector<double>> gmat(1, std::vector<double>(1));
+            gmat.at(0).at(0) = gtensor;
+
+            auto gnmat = matmat(gmat, nmat);
+            for (int i = 0; i < 1; i++) {
+                for (int j = 0; j < 3; j++) {
+                    bmat.at(i).at(j) -= gnmat.at(i).at(j);
+                }
+            }
+
+            // add to kelement, belement
+            std::vector<std::vector<double>> ktmp =
+                matmat(matmat(transpose(bmat), dmat), bmat);
+            std::vector<double> btmp = matvec(transpose(nmat), fbody);
+            for (int i = 0; i < 3; i++) {
+                for (int j = 0; j < 3; j++) {
+                    ktmp.at(i).at(j) *= dxdp * dpdr * w;
+                    kelement.at(i).at(j) += ktmp.at(i).at(j);
+                }
+                btmp.at(i) *= dxdp * dpdr * w;
+                belement.at(i) += btmp.at(i);
+            }
+        }
+
+        // convert element matrix/vector into cartesian coordinate system
+        std::vector<std::vector<double>> kelement_cart(3,
+                                                       std::vector<double>(3));
+        std::vector<double> belement_cart(3);
+        for (int inode = 0; inode < 3; inode++) {
+            auto dxdp_i = dxdp_(pnode.at(inode));
+            for (int jnode = 0; jnode < 3; jnode++) {
+                auto dxdp_j = dxdp_(pnode.at(jnode));
+                kelement_cart.at(inode).at(jnode) =
+                    dxdp_i * kelement.at(inode).at(jnode) * dxdp_j;
+            }
+            belement_cart.at(inode) = dxdp_i * belement.at(inode);
+        }
+
+        // assembling
+        for (int i = 0; i < 1; i++) {
+            for (int inode = 0; inode < 3; inode++) {
+                for (int j = 0; j < 1; j++) {
+                    for (int jnode = 0; jnode < 3; jnode++) {
+                        kglobal.at(node_id.at(inode) + i)
+                            .at(node_id.at(jnode) + j) +=
+                            kelement_cart.at(inode + i).at(jnode + j);
+                    }
+                }
+                bglobal.at(node_id.at(inode) + i) +=
+                    belement_cart.at(inode + i);
+            }
+        }
+    }
+
+    return;
+}
