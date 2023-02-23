@@ -45,3 +45,14 @@ make main && ./main
 ```
 
 `visualize.ipynb`では、論文中図16,17,18,19,20,21,22,23,24,25,26の再現を確認する。
+
+## requirements
+- gccコンパイラ(c++14対応)
+- make
+- python3インタプリタ
+- python ライブラリ
+  - jupyter
+  - scipy
+  - numpy
+  - matplotlib
+  - japanize_matplotlib
